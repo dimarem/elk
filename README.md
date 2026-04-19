@@ -105,6 +105,9 @@ kubectl get svc -n elastic-system
 
 3. Подключиться к UI по адресу `https://<EXTERNAL-IP>:5601`, введя полученный пароль и имя пользователя `elastic`.
 
+<img width="1919" height="914" alt="dashboard" src="https://github.com/user-attachments/assets/3ceb5d33-0bd1-4996-b368-9c315db611ff" />
+
+
 ## Удаление
 
 ```bash
