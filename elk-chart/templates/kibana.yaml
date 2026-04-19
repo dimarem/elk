@@ -1,0 +1,24 @@
+---
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: {{ .Release.Name }}-kibana
+  namespace: {{ .Release.Namespace }}
+spec:
+  version: {{ .Values.kibana.version }}
+  count: {{ .Values.kibana.count }}
+  elasticsearchRef:
+    name: {{ .Release.Name }}-elasticsearch
+  http:
+    service:
+      spec:
+        type: LoadBalancer
+  podTemplate:
+    spec:
+      containers:
+        - name: kibana
+          env:
+            - name: NODE_OPTIONS
+              value: {{ .Values.kibana.nodejsOptsValue | quote }}
+          resources:
+            {{- toYaml .Values.kibana.resources | nindent 12 }}

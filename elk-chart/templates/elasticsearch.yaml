@@ -1,0 +1,109 @@
+---
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: {{ .Release.Name }}-elasticsearch
+  namespace: {{ .Release.Namespace }}
+spec:
+  version: {{ .Values.elasticsearch.version }}
+  nodeSets:
+    - name: master
+      count: {{ .Values.elasticsearch.master.count }}
+      config:
+        node.roles: ["master"]
+      podTemplate:
+        spec:
+          initContainers:
+            - name: sysctl
+              securityContext:
+                privileged: true
+                runAsUser: 0
+              command: ["sh", "-c", "sysctl -w vm.max_map_count=1048576"]
+          containers:
+            - name: elasticsearch
+              env:
+                - name: ES_JAVA_OPTS
+                  value: {{ .Values.elasticsearch.master.javaOptsValue | quote }}
+              resources:
+                {{- toYaml .Values.elasticsearch.master.resources | nindent 16 }}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      elasticsearch.k8s.elastic.co/statefulset-name: {{ .Release.Name }}-es-master
+                  topologyKey: kubernetes.io/hostname
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: {{ .Values.elasticsearch.master.pvc.storage }}
+            storageClassName: {{ .Values.elasticsearch.master.pvc.storageClassName }}
+    - name: data
+      count: {{ .Values.elasticsearch.data.count }}
+      config:
+        node.roles: ["data", "ingest"]
+      podTemplate:
+        spec:
+          initContainers:
+            - name: sysctl
+              securityContext:
+                privileged: true
+                runAsUser: 0
+              command: ["sh", "-c", "sysctl -w vm.max_map_count=1048576"]
+          containers:
+            - name: elasticsearch
+              env:
+                - name: ES_JAVA_OPTS
+                  value: {{ .Values.elasticsearch.data.javaOptsValue | quote }}
+              resources:
+                {{- toYaml .Values.elasticsearch.data.resources | nindent 16 }}
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchLabels:
+                        elasticsearch.k8s.elastic.co/statefulset-name: {{ .Release.Name }}-es-data
+                    topologyKey: kubernetes.io/hostname
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: {{ .Values.elasticsearch.data.pvc.storage }}
+            storageClassName: {{ .Values.elasticsearch.data.pvc.storageClassName }}
+    - name: coordinating
+      count: {{ .Values.elasticsearch.coordinating.count }}
+      config:
+        node.roles: []
+      podTemplate:
+        spec:
+          initContainers:
+            - name: sysctl
+              securityContext:
+                privileged: true
+                runAsUser: 0
+              command: ["sh", "-c", "sysctl -w vm.max_map_count=1048576"]
+          containers:
+            - name: elasticsearch
+              env:
+                - name: ES_JAVA_OPTS
+                  value: {{ .Values.elasticsearch.coordinating.javaOptsValue | quote }}
+              resources:
+                {{- toYaml .Values.elasticsearch.coordinating.resources | nindent 16 }}
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchLabels:
+                        elasticsearch.k8s.elastic.co/statefulset-name: {{ .Release.Name }}-es-coordinating
+                    topologyKey: kubernetes.io/hostname

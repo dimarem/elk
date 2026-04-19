@@ -1,0 +1,83 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-logstash-config
+  namespace: {{ .Release.Namespace }}
+stringData:
+  logstash.yml: |-
+    pipeline.workers: {{ .Values.logstash.pipelineWorkers }}
+    pipeline.batch.size: {{ .Values.logstash.pipelineBatchSize }}
+    log.level: {{ .Values.logstash.logLevel }}
+    {{- if .Values.logstash.pqEnabled }}
+    queue.type: persisted
+    queue.drain: true
+    {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-logstash-pipeline
+  namespace: {{ .Release.Namespace }}
+stringData:
+  pipelines.yml: |-
+    - pipeline.id: main
+      config.string: |-
+        {{- .Values.logstash.pipeline | nindent 8 }}
+---
+apiVersion: logstash.k8s.elastic.co/v1alpha1
+kind: Logstash
+metadata:
+  name: {{ .Release.Name }}-logstash
+  namespace: {{ .Release.Namespace }}
+spec:
+  version: {{ .Values.logstash.version }}
+  count: {{ .Values.logstash.count }}
+  elasticsearchRefs:
+    - name: {{ .Release.Name }}-elasticsearch
+      clusterName: {{ .Values.logstash.clusterName }}
+  configRef:
+    secretName: {{ .Release.Name }}-logstash-config
+  pipelinesRef:
+    secretName: {{ .Release.Name }}-logstash-pipeline
+  {{- if .Values.logstash.pqEnabled }}
+  volumeClaimTemplates:
+    {{- toYaml .Values.logstash.pqVolumeClaim | nindent 4 }}
+  {{- end }}
+  podTemplate:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    common.k8s.elastic.co/type: logstash
+                    logstash.k8s.elastic.co/name: {{ .Release.Name }}-logstash
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: logstash
+          env:
+            - name: LS_JAVA_OPTS
+              value: {{ .Values.logstash.javaOptsValue | quote }}
+          volumeMounts:
+            - name: es-certs
+              mountPath: "/usr/share/logstash/config/certs"
+              readOnly: true
+          resources:
+            {{- toYaml .Values.logstash.resources | nindent 12 }}
+      volumes:
+        - name: es-certs
+          secret:
+            secretName: {{ .Release.Name }}-elasticsearch-es-http-certs-public
+  services:
+    - name: beats
+      service:
+        spec:
+          type: NodePort
+          ports:
+            - port: {{ .Values.logstash.filebeatPort }}
+              name: "filebeat"
+              protocol: TCP
+              targetPort: {{ .Values.logstash.filebeatPort }}

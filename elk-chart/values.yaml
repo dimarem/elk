@@ -1,0 +1,142 @@
+elasticsearch:
+  # версия Elasticsearch
+  version: 8.19.12
+  # мастер-узлы
+  master:
+    # количество узлов
+    count: 3
+    # потребление памяти JVM (50% от выделенной памяти)
+    javaOptsValue: "-Xms1g -Xmx1g"
+    # требования к ресурсам узла
+    resources:
+      requests:
+        memory: 2Gi
+        cpu: 0.5
+      limits:
+        memory: 2Gi
+        cpu: 1
+    pvc:
+      # размер хранилища для каждого пода
+      storage: 20Gi
+      # тип хранилища
+      storageClassName: yc-network-ssd
+  # узлы для хранения данных
+  data:
+    # количество узлов
+    count: 3
+    # потребление памяти JVM (50% от выделенной памяти)
+    javaOptsValue: "-Xms4g -Xmx4g"
+    # требования к ресурсам узла
+    resources:
+      requests:
+        memory: 8Gi
+        cpu: 0.5
+      limits:
+        memory: 8Gi
+        cpu: 1
+    pvc:
+      # размер хранилища для каждого пода
+      storage: 50Gi
+      # тип хранилища
+      storageClassName: yc-network-ssd
+  # координирующие узлы: маршрутизация запросов
+  coordinating:
+    count: 3
+    # потребление памяти JVM (50% от выделенной памяти)
+    javaOptsValue: "-Xms2g -Xmx2g"
+    # требования к ресурсам узла
+    resources:
+      requests:
+        memory: 4Gi
+        cpu: 0.5
+      limits:
+        memory: 4Gi
+        cpu: 1
+
+kibana:
+  # версия Kinaba
+  version: 8.19.12
+  # количество узлов
+  count: 1
+  # потребление памяти Node.js (должно быть примерно 80% от limits)
+  nodejsOptsValue: "--max-old-space-size=2048"
+  # требования к ресурсам узла
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 0.5
+    limits:
+      memory: 2Gi
+      cpu: 1
+
+logstash:
+  # версия Logstash
+  version: 8.19.12
+  # количество узлов
+  count: 3
+  # количество рабочих потоков
+  pipelineWorkers: 4
+  # максимальное количество событий обрабатываемых одним потоком
+  pipelineBatchSize: 125
+  # уровень логирования
+  logLevel: debug
+  # локальный алиас Elasticsearch-кластера
+  clusterName: qs
+  # пользователь для доступа к ES
+  esUser: elastic
+  # индикатор необходимости persistent queue (PQ)
+  pqEnabled: true
+  # настройки PVC для обеспечения PQ
+  pqVolumeClaim:
+    - metadata:
+        name: logstash-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+  # конфигурация пайплайна
+  pipeline: |-
+    input {
+      beats {
+        port => 5044
+      }
+    }
+    filter {
+      mutate {
+        add_field => { "custom_field" => "custom_field_value" }
+      }
+    }
+    output {
+      elasticsearch {
+        hosts => [ "${QS_ES_HOSTS}" ]
+        user => "${QS_ES_USER}"
+        password => "${QS_ES_PASSWORD}"
+        ssl_certificate_authorities => "${QS_ES_SSL_CERTIFICATE_AUTHORITY}"
+      }
+    }
+  # потребление памяти JVM (50% от выделенной памяти)
+  javaOptsValue: "-Xms1g -Xmx1g"
+  # требования к ресурсам узла
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 0.5
+    limits:
+      memory: 2Gi
+      cpu: 1
+  # порт, на котором Logstash ожидает сообщения от Filebeat
+  filebeatPort: 5044
+
+filebeat:
+  # версия Filebeat
+  version: 8.19.12
+  # требования к ресурсам узла
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 0.5
+    limits:
+      memory: 512Mi
+      cpu: 1
